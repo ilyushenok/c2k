@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,7 +49,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hackerapps.c2k.R
 import com.hackerapps.c2k.data.model.IntervalType
+import com.hackerapps.c2k.data.model.Programs
 import com.hackerapps.c2k.engine.WorkoutState
+import com.hackerapps.c2k.ui.component.RequestLocationPermission
 import com.hackerapps.c2k.ui.screen.workout.components.IntervalRing
 import com.hackerapps.c2k.ui.theme.RunOrange
 import com.hackerapps.c2k.ui.theme.WalkBlue
@@ -70,13 +73,28 @@ fun WorkoutScreen(
     val keepScreenOn by vm.keepScreenOn.collectAsStateWithLifecycle()
     val showBatteryPrompt by vm.showBatteryPrompt.collectAsStateWithLifecycle()
 
+    var permissionResolved by remember { mutableStateOf(false) }
     var showStopDialog by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        vm.startWorkout(programId, week, day)
+    val programName = remember(programId) {
+        runCatching { Programs.byId(programId).displayName }.getOrDefault(programId)
     }
 
-    // Keep screen on based on user preference
+    // Request location permission before starting the workout
+    if (!permissionResolved) {
+        RequestLocationPermission { permissionResolved = true }
+    }
+
+    LaunchedEffect(permissionResolved) {
+        if (permissionResolved) vm.startWorkout(programId, week, day)
+    }
+
+    // System back → show stop dialog instead of navigating away
+    BackHandler {
+        if (workoutState is WorkoutState.Completed) onFinished()
+        else showStopDialog = true
+    }
+
     DisposableEffect(keepScreenOn) {
         val window = (context as? android.app.Activity)?.window
         if (keepScreenOn) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -109,23 +127,27 @@ fun WorkoutScreen(
     if (showStopDialog) {
         AlertDialog(
             onDismissRequest = { showStopDialog = false },
-            title = { Text("Stop workout?") },
-            text = { Text("Your progress for this session will be saved as incomplete.") },
+            title = { Text(stringResource(R.string.workout_stop_title)) },
+            text = { Text(stringResource(R.string.workout_stop_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     vm.stop()
                     showStopDialog = false
                     onFinished()
-                }) { Text("Stop") }
+                }) { Text(stringResource(R.string.workout_stop_confirm)) }
             },
             dismissButton = {
-                TextButton(onClick = { showStopDialog = false }) { Text("Cancel") }
+                TextButton(onClick = { showStopDialog = false }) {
+                    Text(stringResource(R.string.workout_stop_cancel))
+                }
             }
         )
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Week $week, Day $day") }) }
+        topBar = {
+            TopAppBar(title = { Text("$programName · Week $week, Day $day") })
+        }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -172,14 +194,17 @@ private fun ActiveWorkoutContent(
     val intervalProgress = 1f - state.secondsRemainingInInterval.toFloat() /
             state.currentInterval.durationSeconds.toFloat()
 
-    // Overall workout progress
     LinearProgressIndicator(
         progress = { state.intervalIndex.toFloat() / state.totalIntervals },
         modifier = Modifier.fillMaxWidth()
     )
     Spacer(Modifier.height(24.dp))
 
-    IntervalRing(progress = intervalProgress.coerceIn(0f, 1f), ringColor = ringColor) {
+    IntervalRing(
+        progress = intervalProgress.coerceIn(0f, 1f),
+        ringColor = ringColor,
+        contentDescription = "$label: ${formatTime(state.secondsRemainingInInterval)} remaining"
+    ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(label, style = MaterialTheme.typography.titleLarge, color = ringColor)
             Spacer(Modifier.height(4.dp))
@@ -253,9 +278,12 @@ private fun PausedWorkoutContent(
     )
     Spacer(Modifier.height(24.dp))
 
-    // Ring frozen at current position, with PAUSED overlay
     Box(contentAlignment = Alignment.Center) {
-        IntervalRing(progress = intervalProgress.coerceIn(0f, 1f), ringColor = ringColor) {
+        IntervalRing(
+            progress = intervalProgress.coerceIn(0f, 1f),
+            ringColor = ringColor,
+            contentDescription = "Paused: $label"
+        ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(label, style = MaterialTheme.typography.titleLarge, color = ringColor)
                 Spacer(Modifier.height(4.dp))

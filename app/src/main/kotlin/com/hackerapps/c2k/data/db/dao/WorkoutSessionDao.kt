@@ -22,13 +22,6 @@ interface WorkoutSessionDao {
     @Query("SELECT * FROM workout_sessions WHERE completed = 1 ORDER BY startedAt DESC LIMIT 10")
     fun observeRecent(): Flow<List<WorkoutSessionEntity>>
 
-    @Query("""
-        SELECT * FROM workout_sessions
-        WHERE programId = :programId AND week = :week AND day = :day AND completed = 1
-        LIMIT 1
-    """)
-    suspend fun findCompleted(programId: String, week: Int, day: Int): WorkoutSessionEntity?
-
     @Query("SELECT * FROM workout_sessions WHERE id = :id")
     suspend fun findById(id: Long): WorkoutSessionEntity?
 

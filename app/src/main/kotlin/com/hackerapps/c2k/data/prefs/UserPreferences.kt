@@ -19,8 +19,9 @@ class UserPreferences(private val context: Context) {
         val GPS_ENABLED        = booleanPreferencesKey("gps_enabled")
         val COUNTDOWN_WARNINGS = booleanPreferencesKey("countdown_warnings")
         val KEEP_SCREEN_ON     = booleanPreferencesKey("keep_screen_on")
-        val LAST_PROGRAM_ID         = stringPreferencesKey("last_program_id")
+        val LAST_PROGRAM_ID          = stringPreferencesKey("last_program_id")
         val BATTERY_PROMPT_DISMISSED = booleanPreferencesKey("battery_prompt_dismissed")
+        val VIBRATION_ENABLED        = booleanPreferencesKey("vibration_enabled")
     }
 
     val ttsEnabled: Flow<Boolean> = context.dataStore.data
@@ -41,6 +42,9 @@ class UserPreferences(private val context: Context) {
     val batteryPromptDismissed: Flow<Boolean> = context.dataStore.data
         .map { it[BATTERY_PROMPT_DISMISSED] ?: false }
 
+    val vibrationEnabled: Flow<Boolean> = context.dataStore.data
+        .map { it[VIBRATION_ENABLED] ?: false }
+
     suspend fun setTtsEnabled(enabled: Boolean) =
         context.dataStore.edit { it[TTS_ENABLED] = enabled }
 
@@ -58,4 +62,7 @@ class UserPreferences(private val context: Context) {
 
     suspend fun setBatteryPromptDismissed() =
         context.dataStore.edit { it[BATTERY_PROMPT_DISMISSED] = true }
+
+    suspend fun setVibrationEnabled(enabled: Boolean) =
+        context.dataStore.edit { it[VIBRATION_ENABLED] = enabled }
 }

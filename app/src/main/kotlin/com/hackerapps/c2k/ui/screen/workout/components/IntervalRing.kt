@@ -15,13 +15,16 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 @Composable
 fun IntervalRing(
-    progress: Float,           // 0f (empty) → 1f (full)
+    progress: Float,
     ringColor: Color,
+    contentDescription: String = "",
     size: Dp = 220.dp,
     strokeWidth: Dp = 18.dp,
     content: @Composable () -> Unit
@@ -34,7 +37,10 @@ fun IntervalRing(
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
 
     Box(contentAlignment = Alignment.Center) {
-        Canvas(modifier = Modifier.size(size)) {
+        Canvas(modifier = Modifier
+            .size(size)
+            .semantics { this.contentDescription = contentDescription }
+        ) {
             val stroke = Stroke(width = strokeWidth.toPx(), cap = StrokeCap.Round)
             val inset = strokeWidth.toPx() / 2
             val arcSize = Size(this.size.width - inset * 2, this.size.height - inset * 2)

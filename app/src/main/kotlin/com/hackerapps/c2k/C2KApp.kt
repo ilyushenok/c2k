@@ -9,7 +9,4 @@ class C2KApp : Application() {
     val database: AppDatabase by lazy { AppDatabase.create(this) }
     val sessionRepository: SessionRepository by lazy { SessionRepository(database) }
 
-    override fun onCreate() {
-        super.onCreate()
-    }
 }

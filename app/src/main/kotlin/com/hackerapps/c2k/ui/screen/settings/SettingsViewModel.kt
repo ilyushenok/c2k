@@ -24,8 +24,12 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     val keepScreenOn = prefs.keepScreenOn
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
+    val vibrationEnabled = prefs.vibrationEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     fun setTtsEnabled(v: Boolean)        { viewModelScope.launch { prefs.setTtsEnabled(v) } }
     fun setGpsEnabled(v: Boolean)        { viewModelScope.launch { prefs.setGpsEnabled(v) } }
     fun setCountdownWarnings(v: Boolean) { viewModelScope.launch { prefs.setCountdownWarnings(v) } }
     fun setKeepScreenOn(v: Boolean)      { viewModelScope.launch { prefs.setKeepScreenOn(v) } }
+    fun setVibrationEnabled(v: Boolean)  { viewModelScope.launch { prefs.setVibrationEnabled(v) } }
 }

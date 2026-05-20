@@ -28,10 +28,11 @@ fun SettingsScreen(
     onBack: () -> Unit,
     vm: SettingsViewModel = viewModel()
 ) {
-    val ttsEnabled       by vm.ttsEnabled.collectAsStateWithLifecycle()
-    val gpsEnabled       by vm.gpsEnabled.collectAsStateWithLifecycle()
+    val ttsEnabled        by vm.ttsEnabled.collectAsStateWithLifecycle()
+    val gpsEnabled        by vm.gpsEnabled.collectAsStateWithLifecycle()
     val countdownWarnings by vm.countdownWarnings.collectAsStateWithLifecycle()
-    val keepScreenOn     by vm.keepScreenOn.collectAsStateWithLifecycle()
+    val keepScreenOn      by vm.keepScreenOn.collectAsStateWithLifecycle()
+    val vibrationEnabled  by vm.vibrationEnabled.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -59,7 +60,14 @@ fun SettingsScreen(
             SettingsToggle(
                 label = stringResource(R.string.settings_countdown_warnings),
                 checked = countdownWarnings,
+                enabled = ttsEnabled,
                 onCheckedChange = vm::setCountdownWarnings
+            )
+            HorizontalDivider()
+            SettingsToggle(
+                label = stringResource(R.string.settings_vibration_enabled),
+                checked = vibrationEnabled,
+                onCheckedChange = vm::setVibrationEnabled
             )
             HorizontalDivider()
             SettingsToggle(
@@ -81,12 +89,13 @@ fun SettingsScreen(
 private fun SettingsToggle(
     label: String,
     checked: Boolean,
+    enabled: Boolean = true,
     onCheckedChange: (Boolean) -> Unit
 ) {
     ListItem(
         headlineContent = { Text(label) },
         trailingContent = {
-            Switch(checked = checked, onCheckedChange = onCheckedChange)
+            Switch(checked = checked, enabled = enabled, onCheckedChange = onCheckedChange)
         }
     )
 }

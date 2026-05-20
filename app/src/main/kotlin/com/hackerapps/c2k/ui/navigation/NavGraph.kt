@@ -31,9 +31,12 @@ fun NavGraph() {
 
         composable(Routes.HOME) {
             HomeScreen(
-                onSelectProgram = { navController.navigate(Routes.program(it)) },
-                onOpenHistory   = { navController.navigate(Routes.HISTORY) },
-                onOpenSettings  = { navController.navigate(Routes.SETTINGS) }
+                onSelectProgram   = { navController.navigate(Routes.program(it)) },
+                onContinueWorkout = { programId, week, day ->
+                    navController.navigate(Routes.workout(programId, week, day))
+                },
+                onOpenHistory     = { navController.navigate(Routes.HISTORY) },
+                onOpenSettings    = { navController.navigate(Routes.SETTINGS) }
             )
         }
 

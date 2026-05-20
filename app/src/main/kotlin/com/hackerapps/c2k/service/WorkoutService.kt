@@ -7,19 +7,27 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.hackerapps.c2k.C2KApp
 import com.hackerapps.c2k.R
+import com.hackerapps.c2k.data.model.IntervalType
 import com.hackerapps.c2k.data.model.Programs
 import com.hackerapps.c2k.data.prefs.UserPreferences
 import com.hackerapps.c2k.engine.WorkoutEngine
@@ -32,6 +40,8 @@ import com.hackerapps.c2k.location.toEntity
 import com.hackerapps.c2k.ui.MainActivity
 
 class WorkoutService : Service() {
+
+    data class WorkoutInfo(val programId: String, val week: Int, val day: Int)
 
     companion object {
         const val ACTION_START  = "com.hackerapps.c2k.action.START"
@@ -47,6 +57,9 @@ class WorkoutService : Service() {
         private const val CHANNEL_ID       = "workout_channel"
         private const val WAKELOCK_TAG     = "C2K::WorkoutLock"
         private const val WAKELOCK_TIMEOUT = 90 * 60 * 1000L
+
+        val isRunning = MutableStateFlow(false)
+        val currentWorkout = MutableStateFlow<WorkoutInfo?>(null)
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -58,6 +71,7 @@ class WorkoutService : Service() {
     private lateinit var prefs: UserPreferences
 
     private var workoutRunning = false
+    private var cleanedUp = false
 
     inner class LocalBinder : Binder() {
         fun getEngine(): WorkoutEngine = engine
@@ -85,13 +99,15 @@ class WorkoutService : Service() {
     }
 
     private fun handleStart(intent: Intent) {
-        if (workoutRunning) return  // already running — caller just needs to bind
+        if (workoutRunning) return
 
         val programId = intent.getStringExtra(EXTRA_PROGRAM_ID) ?: return
         val week      = intent.getIntExtra(EXTRA_WEEK, -1).takeIf { it >= 0 } ?: return
         val day       = intent.getIntExtra(EXTRA_DAY, -1).takeIf { it >= 0 } ?: return
 
         workoutRunning = true
+        isRunning.value = true
+        currentWorkout.value = WorkoutInfo(programId, week, day)
         acquireWakeLock()
         startForeground(NOTIFICATION_ID, buildNotification("Starting…"))
 
@@ -102,14 +118,20 @@ class WorkoutService : Service() {
             val ttsEnabled        = prefs.ttsEnabled.first()
             val gpsEnabled        = prefs.gpsEnabled.first()
             val countdownWarnings = prefs.countdownWarnings.first()
+            val vibrationEnabled  = prefs.vibrationEnabled.first()
 
-            // TextToSpeech must be constructed on the main thread
+            val hasLocationPermission = ContextCompat.checkSelfPermission(
+                this@WorkoutService, android.Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+
             withContext(Dispatchers.Main) {
                 ttsManager = TtsManager(this@WorkoutService)
             }
 
-            locationProvider = if (gpsEnabled) GpsLocationProvider(this@WorkoutService)
-                               else NoOpLocationProvider()
+            locationProvider = if (gpsEnabled && hasLocationPermission)
+                GpsLocationProvider(this@WorkoutService)
+            else
+                NoOpLocationProvider()
 
             val sessionId = app.sessionRepository.startSession(programId, week, day)
 
@@ -133,11 +155,18 @@ class WorkoutService : Service() {
                 }
             }
 
+            var lastIntervalIndex = -1
             launch {
                 engine.state.collect { state ->
                     when (state) {
-                        is WorkoutState.Active    -> updateNotification(state)
-                        is WorkoutState.Paused    -> updateNotificationPaused()
+                        is WorkoutState.Active -> {
+                            if (state.intervalIndex != lastIntervalIndex && lastIntervalIndex >= 0) {
+                                if (vibrationEnabled) vibrate()
+                            }
+                            lastIntervalIndex = state.intervalIndex
+                            updateNotification(state)
+                        }
+                        is WorkoutState.Paused -> updateNotificationPaused()
                         is WorkoutState.Completed -> {
                             app.sessionRepository.finishSession(
                                 sessionId = sessionId,
@@ -145,11 +174,11 @@ class WorkoutService : Service() {
                                 distanceMeters = locationProvider.totalDistanceMeters,
                                 completed = true
                             )
-                            workoutRunning = false
+                            cleanup()
                             stopSelf()
                         }
                         is WorkoutState.Idle -> {
-                            workoutRunning = false
+                            cleanup()
                             stopSelf()
                         }
                     }
@@ -159,44 +188,60 @@ class WorkoutService : Service() {
     }
 
     private fun handleStop() {
-        if (::engine.isInitialized) {
-            val state = engine.state.value
-            val sessionId = when (state) {
-                is WorkoutState.Active -> state.sessionId
-                is WorkoutState.Paused -> state.snapshot.sessionId
-                else -> -1L
-            }
-            val elapsed = when (state) {
-                is WorkoutState.Active -> state.elapsedSessionSeconds
-                is WorkoutState.Paused -> state.snapshot.elapsedSessionSeconds
-                else -> 0
-            }
-            engine.stop()
-            if (sessionId >= 0) {
-                val app = application as C2KApp
-                val distance = if (::locationProvider.isInitialized)
-                    locationProvider.totalDistanceMeters else 0f
-                serviceScope.launch {
-                    app.sessionRepository.finishSession(
-                        sessionId = sessionId,
-                        durationSeconds = elapsed,
-                        distanceMeters = distance,
-                        completed = false
-                    )
-                }
-            }
+        val distance = if (::locationProvider.isInitialized) locationProvider.totalDistanceMeters else 0f
+
+        if (!::engine.isInitialized) {
+            cleanup()
+            stopSelf()
+            return
         }
+
+        val state = engine.state.value
+        val sessionId = when (state) {
+            is WorkoutState.Active -> state.sessionId
+            is WorkoutState.Paused -> state.snapshot.sessionId
+            else -> -1L
+        }
+        val elapsed = when (state) {
+            is WorkoutState.Active -> state.elapsedSessionSeconds
+            is WorkoutState.Paused -> state.snapshot.elapsedSessionSeconds
+            else -> 0
+        }
+        engine.stop()
+
+        if (sessionId < 0) {
+            cleanup()
+            stopSelf()
+            return
+        }
+
+        val app = application as C2KApp
+        cleanup()
+        serviceScope.launch {
+            app.sessionRepository.finishSession(
+                sessionId = sessionId,
+                durationSeconds = elapsed,
+                distanceMeters = distance,
+                completed = false
+            )
+            stopSelf()
+        }
+    }
+
+    private fun cleanup() {
+        if (cleanedUp) return
+        cleanedUp = true
         if (::locationProvider.isInitialized) locationProvider.stop()
         if (::ttsManager.isInitialized) ttsManager.shutdown()
+        if (::wakeLock.isInitialized && wakeLock.isHeld) wakeLock.release()
+        isRunning.value = false
+        currentWorkout.value = null
         workoutRunning = false
-        stopSelf()
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        if (::locationProvider.isInitialized) locationProvider.stop()
-        if (::ttsManager.isInitialized) ttsManager.shutdown()
-        if (::wakeLock.isInitialized && wakeLock.isHeld) wakeLock.release()
+        cleanup()
         serviceScope.cancel()
     }
 
@@ -206,6 +251,19 @@ class WorkoutService : Service() {
         wakeLock = (getSystemService(Context.POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG)
         wakeLock.acquire(WAKELOCK_TIMEOUT)
+    }
+
+    // ── Vibration ─────────────────────────────────────────────────────────────
+
+    private fun vibrate() {
+        val effect = VibrationEffect.createOneShot(200, VibrationEffect.DEFAULT_AMPLITUDE)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            (getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager)
+                .defaultVibrator.vibrate(effect)
+        } else {
+            @Suppress("DEPRECATION")
+            (getSystemService(Context.VIBRATOR_SERVICE) as Vibrator).vibrate(effect)
+        }
     }
 
     // ── Notification ──────────────────────────────────────────────────────────
@@ -250,7 +308,7 @@ class WorkoutService : Service() {
     private fun updateNotification(state: WorkoutState.Active) {
         val mins = state.secondsRemainingInInterval / 60
         val secs = state.secondsRemainingInInterval % 60
-        val text = "${state.currentInterval.type.name}  %d:%02d".format(mins, secs)
+        val text = "${intervalLabel(state.currentInterval.type)}  %d:%02d".format(mins, secs)
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIFICATION_ID, buildNotification(text))
     }
@@ -258,6 +316,13 @@ class WorkoutService : Service() {
     private fun updateNotificationPaused() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(NOTIFICATION_ID, buildNotification(getString(R.string.workout_paused_notification)))
+    }
+
+    private fun intervalLabel(type: IntervalType): String = when (type) {
+        IntervalType.RUN      -> getString(R.string.workout_interval_run)
+        IntervalType.WALK     -> getString(R.string.workout_interval_walk)
+        IntervalType.WARMUP   -> getString(R.string.workout_interval_warmup)
+        IntervalType.COOLDOWN -> getString(R.string.workout_interval_cooldown)
     }
 
     private fun actionPending(action: String): PendingIntent =

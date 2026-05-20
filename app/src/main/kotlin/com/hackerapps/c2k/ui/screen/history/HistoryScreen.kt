@@ -1,5 +1,6 @@
 package com.hackerapps.c2k.ui.screen.history
 
+import android.content.Intent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -25,12 +27,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hackerapps.c2k.R
 import com.hackerapps.c2k.data.db.entity.WorkoutSessionEntity
+import com.hackerapps.c2k.data.model.Programs
 import com.hackerapps.c2k.ui.theme.WarmCoolGreen
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -43,6 +47,7 @@ fun HistoryScreen(
     vm: HistoryViewModel = viewModel()
 ) {
     val sessions by vm.sessions.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -51,6 +56,23 @@ fun HistoryScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (sessions.isNotEmpty()) {
+                        IconButton(onClick = {
+                            val csv = buildCsv(sessions)
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_SUBJECT, "C2K Workout History")
+                                putExtra(Intent.EXTRA_TEXT, csv)
+                            }
+                            context.startActivity(
+                                Intent.createChooser(intent, context.getString(R.string.history_export_chooser))
+                            )
+                        }) {
+                            Icon(Icons.Default.Share, contentDescription = stringResource(R.string.history_export))
+                        }
                     }
                 }
             )
@@ -86,6 +108,8 @@ fun HistoryScreen(
 
 @Composable
 private fun SessionCard(session: WorkoutSessionEntity) {
+    val displayName = Programs.all().find { it.programId == session.programId }?.displayName
+        ?: session.programId
     val date = SimpleDateFormat("EEE d MMM yyyy  HH:mm", Locale.getDefault())
         .format(Date(session.startedAt))
     Card(modifier = Modifier.fillMaxWidth()) {
@@ -106,7 +130,7 @@ private fun SessionCard(session: WorkoutSessionEntity) {
                         )
                     }
                     Text(
-                        "  ${session.programId}  •  Week ${session.week}, Day ${session.day}",
+                        "  $displayName  •  Week ${session.week}, Day ${session.day}",
                         style = MaterialTheme.typography.titleLarge
                     )
                 }
@@ -129,6 +153,17 @@ private fun SessionCard(session: WorkoutSessionEntity) {
             }
         }
     }
+}
+
+private fun buildCsv(sessions: List<WorkoutSessionEntity>): String {
+    val header = "Program,Week,Day,Date,Duration,Distance_m,Completed"
+    val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+    val rows = sessions.map { s ->
+        val name = Programs.all().find { it.programId == s.programId }?.displayName ?: s.programId
+        val date = dateFormat.format(Date(s.startedAt))
+        "$name,${s.week},${s.day},$date,${formatDuration(s.durationSeconds)},${s.distanceMeters.toInt()},${s.completed}"
+    }
+    return (listOf(header) + rows).joinToString("\n")
 }
 
 private fun formatDuration(totalSeconds: Int): String {

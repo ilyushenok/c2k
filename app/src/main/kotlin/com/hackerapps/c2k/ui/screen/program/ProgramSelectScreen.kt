@@ -19,6 +19,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -46,6 +47,8 @@ fun ProgramSelectScreen(
     val state by vm.uiState.collectAsStateWithLifecycle()
     val plan = state.plan ?: return
 
+    val totalDays = plan.weeks.sumOf { it.size }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -65,16 +68,54 @@ fun ProgramSelectScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item { Spacer(Modifier.height(4.dp)) }
+            item {
+                Spacer(Modifier.height(4.dp))
+                if (plan.description.isNotBlank()) {
+                    Text(
+                        plan.description,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+                if (totalDays > 0 && state.completedDays.isNotEmpty()) {
+                    val progress = state.completedDays.size.toFloat() / totalDays
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        stringResource(R.string.program_progress, state.completedDays.size, totalDays),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
 
             itemsIndexed(plan.weeks) { weekIdx, days ->
                 val week = weekIdx + 1
+                val weekDone = days.indices.all { dayIdx -> (week to dayIdx + 1) in state.completedDays }
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(12.dp)) {
-                        Text(
-                            stringResource(R.string.program_week_label, week),
-                            style = MaterialTheme.typography.titleLarge
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                stringResource(R.string.program_week_label, week),
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                            if (weekDone) {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = WarmCoolGreen
+                                )
+                            }
+                        }
                         Spacer(Modifier.height(8.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             days.forEachIndexed { dayIdx, _ ->

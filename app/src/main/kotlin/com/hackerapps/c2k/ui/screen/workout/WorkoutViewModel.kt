@@ -86,6 +86,7 @@ class WorkoutViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun startWorkout(programId: String, week: Int, day: Int) {
+        viewModelScope.launch { prefs.setLastProgramId(programId) }
         checkBatteryOptimization()
         val app = getApplication<Application>()
         val intent = Intent(app, WorkoutService::class.java).apply {

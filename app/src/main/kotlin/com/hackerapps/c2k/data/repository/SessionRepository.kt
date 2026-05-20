@@ -15,9 +15,6 @@ class SessionRepository(private val db: AppDatabase) {
     fun observeRecentSessions(): Flow<List<WorkoutSessionEntity>> =
         db.sessionDao().observeRecent()
 
-    suspend fun isCompleted(programId: String, week: Int, day: Int): Boolean =
-        db.sessionDao().findCompleted(programId, week, day) != null
-
     suspend fun startSession(
         programId: String, week: Int, day: Int
     ): Long {

@@ -13,14 +13,21 @@
     <string name="home_choose_program">Choose a program</string>
     <string name="home_recent_workouts">Recent workouts</string>
     <string name="home_no_workouts">No workouts yet. Start a program to begin!</string>
+    <string name="home_workout_active">Workout in progress — tap to return</string>
+    <string name="home_continue_workout">Continue: %1$s · Week %2$d, Day %3$d</string>
 
     <!-- Program select screen -->
     <string name="program_week_label">Week %1$d</string>
     <string name="program_day_label">Day %1$d</string>
     <string name="program_completed_badge">Done</string>
     <string name="program_start_workout">Start Workout</string>
+    <string name="program_progress">%1$d of %2$d days completed</string>
 
     <!-- Workout screen -->
+    <string name="workout_stop_title">Stop workout?</string>
+    <string name="workout_stop_message">Your progress will be saved as incomplete.</string>
+    <string name="workout_stop_confirm">Stop</string>
+    <string name="workout_stop_cancel">Cancel</string>
     <string name="workout_interval_run">RUN</string>
     <string name="workout_interval_walk">WALK</string>
     <string name="workout_interval_warmup">WARM UP</string>
@@ -41,6 +48,8 @@
     <string name="history_empty">No completed workouts yet.</string>
     <string name="history_week_day">Week %1$d, Day %2$d</string>
     <string name="history_duration">%1$s</string>
+    <string name="history_export">Export CSV</string>
+    <string name="history_export_chooser">Export workout history</string>
 
     <!-- Notification -->
     <string name="notification_channel_name">Workout</string>
@@ -62,6 +71,7 @@
     <string name="settings_gps_enabled">GPS tracking</string>
     <string name="settings_countdown_warnings">Countdown warnings (10s, 5s)</string>
     <string name="settings_keep_screen_on">Keep screen on during workout</string>
+    <string name="settings_vibration_enabled">Vibrate on interval change</string>
 
     <!-- Battery optimization warning -->
     <string name="battery_opt_title">Battery Optimization</string>

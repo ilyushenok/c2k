@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -32,6 +36,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hackerapps.c2k.R
 import com.hackerapps.c2k.data.db.entity.WorkoutSessionEntity
 import com.hackerapps.c2k.data.model.Programs
+import com.hackerapps.c2k.service.WorkoutService
+import com.hackerapps.c2k.ui.theme.WarmCoolGreen
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -40,6 +46,7 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     onSelectProgram: (String) -> Unit,
+    onContinueWorkout: (programId: String, week: Int, day: Int) -> Unit,
     onOpenHistory: () -> Unit,
     onOpenSettings: () -> Unit,
     vm: HomeViewModel = viewModel()
@@ -68,13 +75,38 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item { Spacer(Modifier.height(8.dp)) }
+
+            // Active workout banner
+            if (state.workoutActive) {
+                item {
+                    ActiveWorkoutBanner(
+                        info = state.activeWorkoutInfo,
+                        onClick = {
+                            state.activeWorkoutInfo?.let {
+                                onContinueWorkout(it.programId, it.week, it.day)
+                            }
+                        }
+                    )
+                }
+            }
+
+            // "Continue" shortcut when no active workout
+            state.nextWorkout?.let { next ->
+                item {
+                    ContinueWorkoutCard(
+                        next = next,
+                        onClick = { onContinueWorkout(next.programId, next.week, next.day) }
+                    )
+                }
+            }
+
             item {
-                Spacer(Modifier.height(8.dp))
                 Text(
                     stringResource(R.string.home_choose_program),
                     style = MaterialTheme.typography.titleLarge
                 )
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
             }
 
             items(state.programs) { plan ->
@@ -109,12 +141,12 @@ fun HomeScreen(
 
             if (state.recentSessions.isNotEmpty()) {
                 item {
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(8.dp))
                     Text(
                         stringResource(R.string.home_recent_workouts),
                         style = MaterialTheme.typography.titleLarge
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(4.dp))
                 }
                 items(state.recentSessions.take(5)) { session ->
                     RecentSessionRow(session)
@@ -122,6 +154,58 @@ fun HomeScreen(
             }
 
             item { Spacer(Modifier.height(16.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun ActiveWorkoutBanner(
+    info: WorkoutService.WorkoutInfo?,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = WarmCoolGreen.copy(alpha = 0.15f)
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = WarmCoolGreen)
+            Text(
+                stringResource(R.string.home_workout_active),
+                style = MaterialTheme.typography.bodyLarge,
+                color = WarmCoolGreen
+            )
+        }
+    }
+}
+
+@Composable
+private fun ContinueWorkoutCard(next: NextWorkout, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(Icons.Default.PlayArrow, contentDescription = null)
+            Text(
+                stringResource(R.string.home_continue_workout, next.displayName, next.week, next.day),
+                style = MaterialTheme.typography.bodyLarge
+            )
         }
     }
 }
