@@ -98,7 +98,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
         var streak = 1
         var expected = completedDays.last() - 1
-        for (dayNum in completedDays.reversed().drop(1)) {
+        for (dayNum in completedDays.toList().reversed().drop(1)) {
             if (dayNum == expected) { streak++; expected-- }
             else if (dayNum < expected) break
         }
