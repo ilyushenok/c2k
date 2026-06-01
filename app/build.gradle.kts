@@ -80,7 +80,7 @@ android {
 
 androidComponents {
     onVariants(selector().withBuildType("release")) {
-        it.experimentalProperties["android.experimental.art.profile.emit"] = false
+        it.experimentalProperties.put("android.experimental.art.profile.emit", false)
     }
 }
 
