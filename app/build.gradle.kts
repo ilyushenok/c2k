@@ -42,6 +42,20 @@ android {
         }
     }
 
+    flavorDimensions += "store"
+
+    productFlavors {
+        create("foss") {
+            dimension = "store"
+        }
+        create("play") {
+            dimension = "store"
+            if (localProps["storeFile"] != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
@@ -49,10 +63,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // Apply signing only if storeFile was provided
-            if (localProps["storeFile"] != null) {
-                signingConfig = signingConfigs.getByName("release")
-            }
         }
         debug {
             applicationIdSuffix = ".debug"

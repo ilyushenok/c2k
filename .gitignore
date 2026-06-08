@@ -15,6 +15,7 @@ app/schemas/
 
 # Local machine config — contains SDK path and signing secrets
 local.properties
+local.properties~
 
 # Signing keystores — never commit
 *.keystore
